@@ -1,0 +1,95 @@
+# ================================
+# VitalAgent - .gitignore
+# ================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ---------- Virtual Environment ----------
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- Environment / Secrets ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- IDE / Editors ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Python Packaging ----------
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- Cache ----------
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- Hugging Face Cache ----------
+.cache/huggingface/
+huggingface/
+models--*/
+*.safetensors
+
+# ---------- Raw Datasets ----------
+# Large datasets should NOT be pushed to GitHub
+data/raw/
+
+# ---------- Processed Datasets ----------
+# Generated datasets / embeddings are large
+data/processed/
+
+# ---------- Model Files ----------
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.joblib
+*.pkl
+
+# ---------- NumPy / ML Outputs ----------
+*.npy
+*.npz
+
+# ---------- Experiment Outputs ----------
+outputs/
+results/
+runs/
+wandb/
+mlruns/
+
+# ---------- Temporary Files ----------
+*.tmp
+*.temp
+*.bak
+
+# ---------- Local Database ----------
+*.db
+*.sqlite
+*.sqlite3
