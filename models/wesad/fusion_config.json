@@ -1,0 +1,28 @@
+{
+  "selected_strategy": "BVP + EDA + TEMP + ACC (Aligned Weighted)",
+  "type": "weighted_fusion",
+  "use_alignment": true,
+  "modality_thresholds": {
+    "bvp": 0.66,
+    "eda": 0.83,
+    "temp": 0.1,
+    "acc": 0.9
+  },
+  "modality_weights": {
+    "bvp": 0.25,
+    "eda": 0.25,
+    "temp": 0.2,
+    "acc": 0.30000000000000004
+  },
+  "threshold": 0.56,
+  "used_modalities": [
+    "bvp",
+    "eda",
+    "temp",
+    "acc"
+  ],
+  "improved_over_bvp": false,
+  "validation_f1": 0.8082191780821918,
+  "test_f1": 0.34146341463414637,
+  "bvp_baseline_test_f1": 0.5948717948717949
+}

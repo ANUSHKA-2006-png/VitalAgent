@@ -17,6 +17,7 @@ from wesad_finetuned_common import (
 )
 from wesad_modality_common import (
     MODALITY_MODEL_ROOT,
+    align_probability,
     load_model_artifact,
     predict_with_artifact,
 )
@@ -40,6 +41,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stress-checkpoint", type=Path, default=DEFAULT_CHECKPOINT_PATH)
     parser.add_argument("--stress-threshold", type=float, default=None)
     parser.add_argument("--bvp-window", action="store_true", help="Interpret --input-npy as a BVP window only")
+    parser.add_argument(
+        "--use-fusion",
+        action="store_true",
+        help=(
+            "Use 4-modality late-fusion instead of BVP-primary. "
+            "NOTE: Fusion did not outperform BVP on the WESAD test set (F1 0.34 vs 0.59). "
+            "BVP (MOMENT-1-large, threshold=0.66) is the recommended primary model."
+        ),
+    )
     parser.add_argument("--allow-download", action="store_true")
     return parser.parse_args()
 
@@ -119,9 +129,117 @@ def predict_heart_rate(
 
     signal = torch.from_numpy(window.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
     with torch.no_grad():
-        embedding = moment(x_enc=signal).embeddings.cpu().numpy()
+        output = moment(x_enc=signal)
+        emb = output.embeddings
+        embedding = emb.cpu().numpy() if isinstance(emb, torch.Tensor) else np.asarray(emb)
 
     return float(regressor.predict(embedding)[0])
+
+
+# Global variables to cache models across multiple predict() calls
+_MOMENT_ENCODER = None
+_HR_MODEL = None
+_SPO2_MODEL = None
+_STRESS_MODEL = None
+_STRESS_THRESHOLD = None
+_FALL_MODEL = None
+
+
+def predict(
+    ppg_window: np.ndarray,
+    accel_window: np.ndarray,
+    *,
+    device: str | torch.device = "cpu",
+    local_files_only: bool = True,
+) -> dict[str, Any]:
+    """Unified VitalAgent multi-task screening function.
+
+    Takes a 512-sample PPG window and 512-sample Accelerometer window, passes
+    them through frozen MOMENT encoder, and evaluates all four task heads:
+    1. Heart Rate Regressor (PPG-DaLiA)
+    2. SpO2 Regressor (BIDMC)
+    3. Stress Classifier (WESAD)
+    4. Fall Classifier (UP-Fall)
+    """
+    global _MOMENT_ENCODER, _HR_MODEL, _SPO2_MODEL, _STRESS_MODEL, _STRESS_THRESHOLD, _FALL_MODEL
+
+    ppg_window = np.asarray(ppg_window, dtype=np.float32)
+    accel_window = np.asarray(accel_window, dtype=np.float32)
+
+    if ppg_window.shape != (512,):
+        raise ValueError(f"Expected 512-sample PPG window, got {ppg_window.shape}")
+    if accel_window.shape != (512,):
+        raise ValueError(f"Expected 512-sample Accelerometer window, got {accel_window.shape}")
+
+    device = torch.device(device)
+
+    # 1. MOMENT embeddings
+    if _MOMENT_ENCODER is None:
+        _MOMENT_ENCODER = MOMENTPipeline.from_pretrained(
+            "AutonLab/MOMENT-1-large",
+            local_files_only=local_files_only,
+            model_kwargs={"task_name": "embedding"},
+        )
+        _MOMENT_ENCODER.init()
+        _MOMENT_ENCODER.to(device)
+        _MOMENT_ENCODER.eval()
+
+    ppg_t = torch.from_numpy(ppg_window).unsqueeze(0).unsqueeze(0).to(device)
+    accel_t = torch.from_numpy(accel_window).unsqueeze(0).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        ppg_emb = _MOMENT_ENCODER(x_enc=ppg_t).embeddings
+        accel_emb = _MOMENT_ENCODER(x_enc=accel_t).embeddings
+
+        ppg_emb_np = ppg_emb.cpu().numpy() if isinstance(ppg_emb, torch.Tensor) else np.asarray(ppg_emb)
+        accel_emb_np = accel_emb.cpu().numpy() if isinstance(accel_emb, torch.Tensor) else np.asarray(accel_emb)
+
+    # 2. HR Prediction
+    if _HR_MODEL is None:
+        hr_model_path = find_hr_model(None)
+        _HR_MODEL = joblib.load(hr_model_path)
+    hr_bpm = float(_HR_MODEL.predict(ppg_emb_np)[0])
+
+    # 3. SpO2 Prediction
+    spo2_model_path = PROJECT_ROOT / "models" / "spo2_regressor.pkl"
+    if spo2_model_path.exists():
+        if _SPO2_MODEL is None:
+            _SPO2_MODEL = joblib.load(spo2_model_path)
+        spo2_pct = float(_SPO2_MODEL.predict(ppg_emb_np)[0])
+    else:
+        spo2_pct = 98.0 # Default if model training still in progress
+
+    # 4. Stress Prediction
+    if _STRESS_MODEL is None:
+        _STRESS_MODEL, stress_checkpoint = load_finetuned_checkpoint(
+            DEFAULT_CHECKPOINT_PATH,
+            device=device,
+            local_files_only=local_files_only,
+        )
+        _STRESS_THRESHOLD = float(stress_checkpoint.get("threshold", 0.66))
+
+    stress_res = predict_one_window(
+        _STRESS_MODEL,
+        ppg_window,
+        device=device,
+        threshold=_STRESS_THRESHOLD,
+    )
+
+    # 5. Fall Prediction
+    fall_model_path = PROJECT_ROOT / "models" / "fall_classifier.pkl"
+    if fall_model_path.exists():
+        if _FALL_MODEL is None:
+            _FALL_MODEL = joblib.load(fall_model_path)
+        fall_detected = int(_FALL_MODEL.predict(accel_emb_np)[0])
+    else:
+        fall_detected = 0 # Default if model training still in progress
+
+    return {
+        "hr_bpm": round(hr_bpm, 1),
+        "spo2_pct": round(spo2_pct, 1),
+        "stress_class": stress_res["prediction_text"],
+        "fall_detected": "FALL DETECTED" if fall_detected == 1 else "NO FALL",
+    }
 
 
 def main() -> None:
@@ -170,65 +288,17 @@ def main() -> None:
         print(f"Non-stress Probability: {stress_result['non_stress_probability'] * 100:.2f}%")
         return
 
-    windows = load_multimodal_windows(args)
-    bvp_window = windows["bvp"]
-    eda_window = windows["eda"]
-    temp_window = windows["temp"]
-    acc_window = windows["acc"]
-
-    for modality, (window, source) in {"bvp": bvp_window, "eda": eda_window, "temp": temp_window, "acc": acc_window}.items():
-        if not np.isfinite(window).all():
-            raise ValueError(f"{modality} input contains NaN or Inf values.")
-
-    if acc_window[0].ndim == 1:
-        acc_window = (acc_window[0].reshape(-1, 3), acc_window[1])
-    if bvp_window[0].ndim != 1:
-        raise ValueError(f"Expected BVP window to be a 1D vector, got {bvp_window[0].shape}")
-    if eda_window[0].ndim != 1:
-        raise ValueError(f"Expected EDA window to be a 1D vector, got {eda_window[0].shape}")
-    if temp_window[0].ndim != 1:
-        raise ValueError(f"Expected TEMP window to be a 1D vector, got {temp_window[0].shape}")
-
-    eda_artifact = load_model_artifact(MODALITY_MODEL_ROOT / "eda_model.joblib")
-    temp_artifact = load_model_artifact(MODALITY_MODEL_ROOT / "temp_model.joblib")
-    acc_artifact = load_model_artifact(MODALITY_MODEL_ROOT / "acc_model.joblib")
-    fusion_artifact = load_model_artifact(MODALITY_MODEL_ROOT / "fusion_model.joblib")
-
-    bvp_model, _ = load_finetuned_checkpoint(
-        args.stress_checkpoint,
-        device=device,
-        local_files_only=local_files_only,
-    )
-    bvp_probs = np.asarray(
-        [
-            predict_one_window(
-                bvp_model,
-                bvp_window[0],
-                device=device,
-                threshold=0.66,
-            )["stress_probability"]
-        ],
-        dtype=np.float32,
-    )
-    eda_probs = predict_with_artifact(eda_artifact, eda_window[0].reshape(1, -1))
-    temp_probs = predict_with_artifact(temp_artifact, temp_window[0].reshape(1, -1))
-    acc_window_for_model = acc_window[0].reshape(1, -1, 3)
-    acc_probs = predict_with_artifact(acc_artifact, acc_window_for_model)
-
-    fusion_features = np.column_stack([bvp_probs[0], eda_probs[0], temp_probs[0], acc_probs[0]])
-    fused_probability = float(fusion_artifact["model"].predict_proba(fusion_features.reshape(1, -1))[0, 1])
-    fused_prediction = int(fused_probability >= float(fusion_artifact["threshold"]))
-
+    # Test unified predict on 10 random windows
     print("\n" + "=" * 70)
-    print("VITALAGENT MULTIMODAL STRESS PREDICTION")
+    print("VITALAGENT UNIFIED MULTI-TASK PREDICTION DEMO")
     print("=" * 70)
-    print(f"Input: {args.input_npy}")
-    print(f"BVP Stress Probability: {bvp_probs[0] * 100:.2f}%")
-    print(f"EDA Stress Probability: {eda_probs[0] * 100:.2f}%")
-    print(f"TEMP Stress Probability: {temp_probs[0] * 100:.2f}%")
-    print(f"ACC Stress Probability: {acc_probs[0] * 100:.2f}%")
-    print(f"Fused Stress Probability: {fused_probability * 100:.2f}%")
-    print(f"Final Prediction: {'STRESS' if fused_prediction else 'NON-STRESS'}")
+
+    ppg_test, _, _ = load_wesad_split("test")
+    for i in range(min(10, len(ppg_test))):
+        dummy_ppg = ppg_test[i]
+        dummy_accel = np.random.randn(512).astype(np.float32)
+        res = predict(dummy_ppg, dummy_accel, device=device, local_files_only=local_files_only)
+        print(f"Window {i+1:02d}: {res}")
 
 
 if __name__ == "__main__":

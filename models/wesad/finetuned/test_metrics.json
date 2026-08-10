@@ -1,0 +1,75 @@
+{
+  "checkpoint": "C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\moment_stress_classifier.pt",
+  "split": "test",
+  "threshold": 0.66,
+  "threshold_source": "validation threshold JSON (C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\threshold_optimization.json)",
+  "split_checks": {
+    "split": "test",
+    "X_shape": [
+      1132,
+      512
+    ],
+    "X_dtype": "float32",
+    "y_shape": [
+      1132
+    ],
+    "y_dtype": "int64",
+    "subjects": [
+      "S15",
+      "S16",
+      "S17"
+    ],
+    "class_distribution": {
+      "0": 872,
+      "1": 260
+    },
+    "is_finite": true,
+    "has_nan": false,
+    "has_inf": false
+  },
+  "metrics": {
+    "accuracy": 0.7906360424028268,
+    "precision": 0.5353846153846153,
+    "recall": 0.6692307692307692,
+    "f1": 0.5948717948717949,
+    "roc_auc": 0.8541240296400847,
+    "confusion_matrix": [
+      [
+        721,
+        151
+      ],
+      [
+        86,
+        174
+      ]
+    ],
+    "threshold": 0.66
+  },
+  "threshold_optimization": {
+    "path": "C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\threshold_optimization.json",
+    "selection_split": "val",
+    "selection_subjects": [
+      "S13",
+      "S14"
+    ],
+    "selection_metric": "validation_f1",
+    "selected_validation_metrics": {
+      "accuracy": 0.8359788359788359,
+      "precision": 0.6009389671361502,
+      "recall": 0.7664670658682635,
+      "f1": 0.6736842105263158,
+      "roc_auc": 0.8996675579232029,
+      "confusion_matrix": [
+        [
+          504,
+          85
+        ],
+        [
+          39,
+          128
+        ]
+      ],
+      "threshold": 0.66
+    }
+  }
+}

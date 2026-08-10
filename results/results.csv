@@ -1,0 +1,5 @@
+Task,Dataset,Metric,Value,Target,Status
+Heart Rate (HR),PPG-DaLiA,MAE (BPM),5.52,< 10 BPM,PASSED
+SpO2 Percentage,BIDMC,MAE (%),3.24,< 3%,FAILED
+Stress Screening,WESAD,F1 Score,0.5949,> 0.70,FAILED
+Fall Detection,UP-Fall,F1 Score,0.9200,> 0.85,PASSED

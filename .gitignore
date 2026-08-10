@@ -77,19 +77,16 @@ checkpoints/
 *.npy
 *.npz
 
-# ---------- Experiment Outputs ----------
-outputs/
-results/
-runs/
-wandb/
-mlruns/
+# ---------- Temporary Scratch / Audit ----------
+scratch/
+pyrefly.toml
 
-# ---------- Temporary Files ----------
-*.tmp
-*.temp
-*.bak
-
-# ---------- Local Database ----------
-*.db
-*.sqlite
-*.sqlite3
+# ---------- Exception rules for required ML model artifacts and results ----------
+!models/*.pkl
+!models/wesad/*.json
+!models/wesad/finetuned/*.json
+!models/wesad/modality/bvp_probabilities/*.npy
+!data/processed/stress/splits/
+!data/processed/spo2/splits/
+!data/processed/moment_embeddings/
+!results/results.csv

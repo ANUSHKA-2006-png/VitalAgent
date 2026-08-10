@@ -13,6 +13,7 @@ from wesad_finetuned_common import (
 from wesad_modality_common import (
     MODALITY_METRICS_DIR,
     MODALITY_MODEL_ROOT,
+    align_probability,
     compute_binary_metrics,
     load_model_artifact,
     load_split,
@@ -47,13 +48,42 @@ def evaluate_fusion(artifact_path: Path, split: str = "test") -> tuple[np.ndarra
 
     bvp_probs = np.load(bvp_probabilities_path)
     y = np.load(bvp_labels_path)
+
     eda_probs, _, _ = evaluate_modality("eda", MODALITY_MODEL_ROOT / "eda_model.joblib", split)
     temp_probs, _, _ = evaluate_modality("temp", MODALITY_MODEL_ROOT / "temp_model.joblib", split)
     acc_probs, _, _ = evaluate_modality("acc", MODALITY_MODEL_ROOT / "acc_model.joblib", split)
-    features = np.column_stack([bvp_probs, eda_probs, temp_probs, acc_probs])
-    probabilities = artifact["model"].predict_proba(features)[:, 1]
-    metrics = compute_binary_metrics(y, probabilities, threshold=float(artifact["threshold"]))
-    return probabilities.astype(np.float32), y.astype(np.int64), metrics
+
+    probs_dict = {
+        "bvp": bvp_probs,
+        "eda": eda_probs,
+        "temp": temp_probs,
+        "acc": acc_probs,
+    }
+
+    fusion_type = artifact.get("type", "stacker")
+    threshold = float(artifact["threshold"])
+
+    if fusion_type == "weighted_fusion":
+        weights = artifact["weights"]
+        use_alignment = artifact.get("use_alignment", True)
+        modality_thresholds = artifact.get("modality_thresholds", {})
+
+        fused_probabilities = np.zeros(len(y), dtype=np.float32)
+        for mod, w in weights.items():
+            if w <= 0.0:
+                continue
+            p_mod = probs_dict[mod]
+            if use_alignment and mod in modality_thresholds:
+                p_mod = align_probability(p_mod, modality_thresholds[mod])
+            fused_probabilities += float(w) * p_mod
+
+    else:
+        features = np.column_stack([bvp_probs, eda_probs, temp_probs, acc_probs])
+        stacker_model = artifact["stacker_model"] if "stacker_model" in artifact else artifact["model"]
+        fused_probabilities = stacker_model.predict_proba(features)[:, 1]
+
+    metrics = compute_binary_metrics(y, fused_probabilities, threshold=threshold)
+    return fused_probabilities.astype(np.float32), y.astype(np.int64), metrics
 
 
 def main() -> None:
@@ -61,7 +91,7 @@ def main() -> None:
     threshold, _ = load_selected_threshold(args.threshold_json)
 
     print("=" * 70)
-    print("VITALAGENT - MODALITY COMPARISON")
+    print("VITALAGENT - MODALITY & FUSION COMPARISON")
     print("=" * 70)
 
     results = {}
@@ -69,6 +99,7 @@ def main() -> None:
     bvp_labels_path = MODALITY_MODEL_ROOT / "bvp_probabilities" / "test_labels.npy"
     if not bvp_probabilities_path.exists() or not bvp_labels_path.exists():
         raise FileNotFoundError("BVP probability cache not found. Run src/compute_bvp_probabilities.py first.")
+
     bvp_probs = np.load(bvp_probabilities_path)
     bvp_labels = np.load(bvp_labels_path)
     bvp_metrics = compute_binary_metrics(bvp_labels, bvp_probs, threshold=float(threshold))
@@ -86,12 +117,13 @@ def main() -> None:
     fusion_probs, fusion_labels, fusion_metrics = evaluate_fusion(MODALITY_MODEL_ROOT / "fusion_model.joblib")
     results["fusion"] = {"metrics": fusion_metrics, "threshold": float(load_model_artifact(MODALITY_MODEL_ROOT / "fusion_model.joblib")["threshold"])}
 
-    print("\nModality | Accuracy | Precision | Recall | F1 | ROC-AUC")
-    print("-" * 70)
+    print("\nModality | Accuracy | Precision | Recall | F1 | ROC-AUC | Threshold")
+    print("-" * 80)
     for modality in ["bvp", "eda", "temp", "acc", "fusion"]:
         metrics = results[modality]["metrics"]
+        thresh = results[modality]["threshold"]
         print(
-            f"{modality:>8} | {metrics['accuracy']:.4f} | {metrics['precision']:.4f} | {metrics['recall']:.4f} | {metrics['f1']:.4f} | {metrics['roc_auc']:.4f}"
+            f"{modality:>8} | {metrics['accuracy']:.4f}   | {metrics['precision']:.4f}    | {metrics['recall']:.4f} | {metrics['f1']:.4f} | {metrics['roc_auc']:.4f}  | {thresh:.2f}"
         )
 
     save_json(args.output_json, results)

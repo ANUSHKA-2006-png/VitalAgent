@@ -102,17 +102,18 @@ def compute_binary_metrics(
     y_true = np.asarray(y_true, dtype=np.int64)
     probabilities = np.asarray(probabilities, dtype=np.float32)
     y_pred = (probabilities >= threshold).astype(np.int64)
-    metrics = {
+    roc_auc: float | None = None
+    if len(np.unique(y_true)) == 2:
+        roc_auc = float(roc_auc_score(y_true, probabilities))
+    metrics: dict[str, Any] = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "f1": float(f1_score(y_true, y_pred, zero_division=0)),
-        "roc_auc": None,
+        "roc_auc": roc_auc,
         "confusion_matrix": confusion_matrix(y_true, y_pred).astype(int).tolist(),
-        "threshold": float(threshold),
+        "threshold": threshold,
     }
-    if len(np.unique(y_true)) == 2:
-        metrics["roc_auc"] = float(roc_auc_score(y_true, probabilities))
     return metrics
 
 
@@ -141,11 +142,11 @@ def threshold_grid(start: float = THRESHOLD_MIN, stop: float = THRESHOLD_MAX, st
 
 
 def select_threshold(y_true: np.ndarray, probabilities: np.ndarray) -> tuple[float, dict[str, Any]]:
-    best_threshold = None
-    best_metrics = None
+    best_threshold: float | None = None
+    best_metrics: dict[str, Any] | None = None
     for threshold in threshold_grid():
         metrics = compute_binary_metrics(y_true, probabilities, threshold=float(threshold))
-        if best_metrics is None:
+        if best_metrics is None or best_threshold is None:
             best_threshold = float(threshold)
             best_metrics = metrics
             continue
@@ -157,7 +158,7 @@ def select_threshold(y_true: np.ndarray, probabilities: np.ndarray) -> tuple[flo
             best_metrics = metrics
     if best_threshold is None or best_metrics is None:
         raise RuntimeError("Failed to select a threshold")
-    return float(best_threshold), best_metrics
+    return best_threshold, best_metrics
 
 
 def _safe_correlation(x: np.ndarray, y: np.ndarray) -> float:
@@ -291,16 +292,16 @@ def train_candidate_models(
         ),
     ]
 
-    best_name = None
-    best_model = None
-    best_threshold = None
-    best_metrics = None
+    best_name: str | None = None
+    best_model: Any = None
+    best_threshold: float | None = None
+    best_metrics: dict[str, Any] | None = None
 
     for name, model in candidates:
         model.fit(X_train, y_train)
         probabilities = model.predict_proba(X_val)[:, 1]
         threshold, metrics = select_threshold(y_val, probabilities)
-        if best_metrics is None or metrics["f1"] > best_metrics["f1"] + 1e-12:
+        if best_metrics is None or best_threshold is None or metrics["f1"] > best_metrics["f1"] + 1e-12:
             best_name = name
             best_model = model
             best_threshold = threshold
@@ -314,7 +315,7 @@ def train_candidate_models(
     if best_name is None or best_model is None or best_threshold is None or best_metrics is None:
         raise RuntimeError(f"Failed to train a modality model for {modality}")
 
-    return best_name, best_model, float(best_threshold), best_metrics
+    return best_name, best_model, best_threshold, best_metrics
 
 
 def save_model_artifact(path: str | Path, payload: dict[str, Any]) -> None:
@@ -333,6 +334,62 @@ def load_model_artifact(path: str | Path) -> dict[str, Any]:
 
 def predict_with_artifact(artifact: dict[str, Any], X: np.ndarray) -> np.ndarray:
     model = artifact["model"]
+    if hasattr(model, "n_jobs"):
+        model.n_jobs = 1
     X_features = build_feature_matrix(X, artifact["modality"])
     probabilities = model.predict_proba(X_features)[:, 1]
     return np.asarray(probabilities, dtype=np.float32)
+
+
+def align_probability(prob: float | np.ndarray, tau: float) -> float | np.ndarray:
+    prob_arr = np.asarray(prob, dtype=np.float32)
+    tau = tau
+    if tau <= 0.0 or tau >= 1.0:
+        return prob
+    aligned = np.where(
+        prob_arr <= tau,
+        0.5 * (prob_arr / tau),
+        0.5 + 0.5 * ((prob_arr - tau) / (1.0 - tau)),
+    )
+    aligned = np.clip(aligned, 0.0, 1.0)
+    if np.ndim(prob) == 0:
+        return float(aligned)
+    return aligned
+
+
+def compute_oof_modality_probabilities(
+    modality: str,
+    seed: int = DEFAULT_SEED,
+) -> np.ndarray:
+    X_train, y_train, metadata_train = load_split(modality, "train")
+    subjects = metadata_train["subject"].to_numpy()
+    unique_subjects = sorted(np.unique(subjects))
+
+    oof_probabilities = np.zeros(len(y_train), dtype=np.float32)
+
+    for subject in unique_subjects:
+        train_idx = np.where(subjects != subject)[0]
+        val_idx = np.where(subjects == subject)[0]
+
+        X_tr = X_train[train_idx]
+        y_tr = y_train[train_idx]
+        X_val_subj = X_train[val_idx]
+        y_val_subj = y_train[val_idx]
+
+        X_tr_feats = build_feature_matrix(X_tr, modality)
+        X_val_feats = build_feature_matrix(X_val_subj, modality)
+
+        _, model, _, _ = train_candidate_models(
+            X_tr_feats,
+            y_tr,
+            X_val_feats,
+            y_val_subj,
+            modality=modality,
+            seed=seed,
+        )
+        if hasattr(model, "n_jobs"):
+            model.n_jobs = 1
+        probs = model.predict_proba(X_val_feats)[:, 1]
+        oof_probabilities[val_idx] = probs.astype(np.float32)
+
+    return oof_probabilities

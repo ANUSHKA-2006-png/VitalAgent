@@ -159,7 +159,7 @@ else:
 
 
 print(
-    f"\n🏆 Best validation model: {best_name}"
+    f"\n[BEST] Best validation model: {best_name}"
 )
 
 
@@ -214,7 +214,15 @@ for i in range(10):
         f"Predicted = {test_predictions[i]:.2f} BPM"
     )
 
+import joblib
+from pathlib import Path
+models_dir = Path("models")
+models_dir.mkdir(parents=True, exist_ok=True)
+joblib.dump(best_model, models_dir / "ppg_dalia_hr_regressor.pkl")
+joblib.dump(best_model, models_dir / "heart_rate_regressor.pkl")
+print(f"\n[OK] Saved best model ({best_name}) to models/ppg_dalia_hr_regressor.pkl")
+
 
 print("\n" + "=" * 60)
-print("✅ HR MODEL EVALUATION COMPLETED")
+print("[OK] HR MODEL EVALUATION COMPLETED")
 print("=" * 60)
