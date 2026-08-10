@@ -80,6 +80,7 @@ checkpoints/
 # ---------- Temporary Scratch / Audit ----------
 scratch/
 pyrefly.toml
+pyrightconfig.json
 
 # ---------- Exception rules for required ML model artifacts and results ----------
 !models/*.pkl
