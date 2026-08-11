@@ -1,0 +1,45 @@
+VITALAGENT — HEART RATE MODEL RESULTS
+
+Dataset: PPG-DaLiA
+Subjects: 15
+
+Total samples: 64,697
+Window size: 512 samples
+Sampling rate: 64 Hz
+Window duration: 8 seconds
+Window shift: 2 seconds
+
+MOMENT embedding size: 1024
+
+TRAIN:
+Samples: 43,215
+Subjects: S1-S10
+
+VALIDATION:
+Samples: 8,475
+Subjects: S11-S12
+
+TEST:
+Samples: 13,007
+Subjects: S13-S15
+
+MODEL COMPARISON
+
+Ridge Regression:
+Validation MAE: 10.43 BPM
+Validation RMSE: 14.25 BPM
+Validation R²: 0.6830
+
+Random Forest:
+Validation MAE: 9.99 BPM
+Validation RMSE: 14.60 BPM
+Validation R²: 0.6672
+
+Selected Model:
+Random Forest
+
+FINAL TEST PERFORMANCE
+
+Test MAE: 5.52 BPM
+Test RMSE: 9.09 BPM
+Test R²: 0.7974
