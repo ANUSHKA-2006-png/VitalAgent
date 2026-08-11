@@ -1,0 +1,251 @@
+{
+  "moment_model_id": "AutonLab/MOMENT-1-large",
+  "checkpoint_path": "C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\moment_stress_classifier.pt",
+  "checkpoint_type": "head_only",
+  "stage": "head",
+  "best_epoch": 5,
+  "best_validation_metrics": {
+    "accuracy": 0.783068783068783,
+    "precision": 0.5054151624548736,
+    "recall": 0.8383233532934131,
+    "f1": 0.6306306306306306,
+    "roc_auc": 0.8996675579232029,
+    "confusion_matrix": [
+      [
+        452,
+        137
+      ],
+      [
+        27,
+        140
+      ]
+    ],
+    "threshold": 0.5
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.4900201731556098,
+      "validation": {
+        "accuracy": 0.7870370370370371,
+        "precision": 0.5116279069767442,
+        "recall": 0.7904191616766467,
+        "f1": 0.6211764705882353,
+        "roc_auc": 0.8582902107499771,
+        "confusion_matrix": [
+          [
+            463,
+            126
+          ],
+          [
+            35,
+            132
+          ]
+        ],
+        "threshold": 0.5
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.38797186136181844,
+      "validation": {
+        "accuracy": 0.7843915343915344,
+        "precision": 0.5075757575757576,
+        "recall": 0.8023952095808383,
+        "f1": 0.6218097447795824,
+        "roc_auc": 0.874627654707563,
+        "confusion_matrix": [
+          [
+            459,
+            130
+          ],
+          [
+            33,
+            134
+          ]
+        ],
+        "threshold": 0.5
+      }
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.3695020373962572,
+      "validation": {
+        "accuracy": 0.7420634920634921,
+        "precision": 0.4551282051282051,
+        "recall": 0.8502994011976048,
+        "f1": 0.592901878914405,
+        "roc_auc": 0.8878440063845144,
+        "confusion_matrix": [
+          [
+            419,
+            170
+          ],
+          [
+            25,
+            142
+          ]
+        ],
+        "threshold": 0.5
+      }
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.35439461878513856,
+      "validation": {
+        "accuracy": 0.7804232804232805,
+        "precision": 0.5017921146953405,
+        "recall": 0.8383233532934131,
+        "f1": 0.6278026905829597,
+        "roc_auc": 0.8948181735001982,
+        "confusion_matrix": [
+          [
+            450,
+            139
+          ],
+          [
+            27,
+            140
+          ]
+        ],
+        "threshold": 0.5
+      }
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.350674965709352,
+      "validation": {
+        "accuracy": 0.783068783068783,
+        "precision": 0.5054151624548736,
+        "recall": 0.8383233532934131,
+        "f1": 0.6306306306306306,
+        "roc_auc": 0.8996675579232029,
+        "confusion_matrix": [
+          [
+            452,
+            137
+          ],
+          [
+            27,
+            140
+          ]
+        ],
+        "threshold": 0.5
+      }
+    }
+  ],
+  "split_checks": {
+    "train": {
+      "split": "train",
+      "X_shape": [
+        3732,
+        512
+      ],
+      "X_dtype": "float32",
+      "y_shape": [
+        3732
+      ],
+      "y_dtype": "int64",
+      "subjects": [
+        "S10",
+        "S11",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8",
+        "S9"
+      ],
+      "class_distribution": {
+        "0": 2914,
+        "1": 818
+      },
+      "is_finite": true,
+      "has_nan": false,
+      "has_inf": false
+    },
+    "val": {
+      "split": "val",
+      "X_shape": [
+        756,
+        512
+      ],
+      "X_dtype": "float32",
+      "y_shape": [
+        756
+      ],
+      "y_dtype": "int64",
+      "subjects": [
+        "S13",
+        "S14"
+      ],
+      "class_distribution": {
+        "0": 589,
+        "1": 167
+      },
+      "is_finite": true,
+      "has_nan": false,
+      "has_inf": false
+    },
+    "test": {
+      "split": "test",
+      "X_shape": [
+        1132,
+        512
+      ],
+      "X_dtype": "float32",
+      "y_shape": [
+        1132
+      ],
+      "y_dtype": "int64",
+      "subjects": [
+        "S15",
+        "S16",
+        "S17"
+      ],
+      "class_distribution": {
+        "0": 872,
+        "1": 260
+      },
+      "is_finite": true,
+      "has_nan": false,
+      "has_inf": false
+    },
+    "subject_overlap": {
+      "train_val": [],
+      "train_test": [],
+      "val_test": []
+    }
+  },
+  "class_weights": [
+    0.6403568983078003,
+    2.2811737060546875
+  ],
+  "parameter_counts": {
+    "total": 341242370,
+    "trainable": 2050
+  },
+  "elapsed_seconds": 20698.346806764603,
+  "training_args": {
+    "stage": "head",
+    "epochs": 5,
+    "batch_size": 8,
+    "lr": null,
+    "weight_decay": 0.0001,
+    "head_dropout": 0.1,
+    "patience": 2,
+    "min_delta": 0.0001,
+    "seed": 42,
+    "threshold": 0.5,
+    "max_train_samples": null,
+    "max_val_samples": null,
+    "evaluate_test": false,
+    "allow_download": false,
+    "sanity_check": false,
+    "num_workers": 0,
+    "checkpoint_path": "C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\moment_stress_classifier.pt",
+    "metrics_path": "C:\\Users\\Anushka\\Documents\\VitalAgent\\models\\wesad\\finetuned\\metrics.json"
+  }
+}

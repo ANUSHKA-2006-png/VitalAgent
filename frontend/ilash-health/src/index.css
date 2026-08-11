@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", -apple-system, sans-serif;
+  color: #1c1c1e;
+  background: #f7f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input,
+textarea {
+  outline: none;
+}
+
+input:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  box-shadow: 0 0 0 2px #6c5ce7;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #e5e5ea;
+  border-radius: 8px;
+}

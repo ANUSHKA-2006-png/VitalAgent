@@ -1,0 +1,26 @@
+{
+  "train": {
+    "shape": [
+      3732
+    ],
+    "label_shape": [
+      3732
+    ]
+  },
+  "val": {
+    "shape": [
+      756
+    ],
+    "label_shape": [
+      756
+    ]
+  },
+  "test": {
+    "shape": [
+      1132
+    ],
+    "label_shape": [
+      1132
+    ]
+  }
+}

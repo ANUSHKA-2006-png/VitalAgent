@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -233,6 +234,93 @@ def predict(
         fall_detected = int(_FALL_MODEL.predict(accel_emb_np)[0])
     else:
         fall_detected = 0 # Default if model training still in progress
+
+    return {
+        "hr_bpm": round(hr_bpm, 1),
+        "spo2_pct": round(spo2_pct, 1),
+        "stress_class": stress_res["prediction_text"],
+        "fall_detected": "FALL DETECTED" if fall_detected == 1 else "NO FALL",
+    }
+
+
+def predict_multimodal(
+    hr_window: np.ndarray,
+    stress_window: np.ndarray,
+    spo2_window: np.ndarray,
+    accel_window: np.ndarray,
+    *,
+    device: str | torch.device = "cpu",
+    local_files_only: bool = True,
+) -> dict[str, Any]:
+    """Predict physiological state using separate modality signal inputs for each model."""
+    global _MOMENT_ENCODER, _HR_MODEL, _SPO2_MODEL, _STRESS_MODEL, _STRESS_THRESHOLD, _FALL_MODEL
+
+    hr_window = np.asarray(hr_window, dtype=np.float32)
+    stress_window = np.asarray(stress_window, dtype=np.float32)
+    spo2_window = np.asarray(spo2_window, dtype=np.float32)
+    accel_window = np.asarray(accel_window, dtype=np.float32)
+
+    device = torch.device(device)
+
+    # Load MOMENT encoder if needed
+    if _MOMENT_ENCODER is None:
+        _MOMENT_ENCODER = MOMENTPipeline.from_pretrained(
+            "AutonLab/MOMENT-1-large",
+            local_files_only=local_files_only,
+            model_kwargs={"task_name": "embedding"},
+        )
+        _MOMENT_ENCODER.init()
+        _MOMENT_ENCODER.to(device)
+        _MOMENT_ENCODER.eval()
+
+    def get_embedding(window: np.ndarray) -> np.ndarray:
+        t = torch.from_numpy(window).unsqueeze(0).unsqueeze(0).to(device)
+        with torch.no_grad():
+            emb = _MOMENT_ENCODER(x_enc=t).embeddings
+            return emb.cpu().numpy() if isinstance(emb, torch.Tensor) else np.asarray(emb)
+
+    # 1. HR Prediction (using HR PPG window)
+    if _HR_MODEL is None:
+        hr_model_path = find_hr_model(None)
+        _HR_MODEL = joblib.load(hr_model_path)
+    hr_emb = get_embedding(hr_window)
+    hr_bpm = float(_HR_MODEL.predict(hr_emb)[0])
+
+    # 2. SpO2 Prediction (using SpO2 PLETH window)
+    spo2_model_path = PROJECT_ROOT / "models" / "spo2_regressor.pkl"
+    if spo2_model_path.exists():
+        if _SPO2_MODEL is None:
+            _SPO2_MODEL = joblib.load(spo2_model_path)
+        spo2_emb = get_embedding(spo2_window)
+        spo2_pct = float(_SPO2_MODEL.predict(spo2_emb)[0])
+    else:
+        spo2_pct = 98.0
+
+    # 3. Stress Prediction (using WESAD BVP window)
+    if _STRESS_MODEL is None:
+        _STRESS_MODEL, stress_checkpoint = load_finetuned_checkpoint(
+            DEFAULT_CHECKPOINT_PATH,
+            device=device,
+            local_files_only=local_files_only,
+        )
+        _STRESS_THRESHOLD = float(stress_checkpoint.get("threshold", 0.66))
+
+    stress_res = predict_one_window(
+        _STRESS_MODEL,
+        stress_window,
+        device=device,
+        threshold=_STRESS_THRESHOLD,
+    )
+
+    # 4. Fall Prediction (using Accelerometer window)
+    fall_model_path = PROJECT_ROOT / "models" / "fall_classifier.pkl"
+    if fall_model_path.exists():
+        if _FALL_MODEL is None:
+            _FALL_MODEL = joblib.load(fall_model_path)
+        accel_emb = get_embedding(accel_window)
+        fall_detected = int(_FALL_MODEL.predict(accel_emb)[0])
+    else:
+        fall_detected = 0
 
     return {
         "hr_bpm": round(hr_bpm, 1),

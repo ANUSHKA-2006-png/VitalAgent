@@ -60,11 +60,34 @@ models--*/
 data/raw/
 
 # ---------- Processed Datasets ----------
-# Generated datasets / embeddings are large
-data/processed/
+# Ignore all processed datasets except required split files and moment embeddings
+data/processed/*
+!data/processed/stress/
+data/processed/stress/*
+!data/processed/stress/splits/
+!data/processed/stress/splits/*.npy
+!data/processed/spo2/
+data/processed/spo2/*
+!data/processed/spo2/splits/
+!data/processed/spo2/splits/*.npy
+!data/processed/moment_embeddings/
+!data/processed/moment_embeddings/**/*.npy
 
 # ---------- Model Files ----------
-models/
+# Ignore all model files except required serialized heads/configurations
+models/*
+!models/*.pkl
+!models/wesad/
+models/wesad/*
+!models/wesad/*.json
+!models/wesad/finetuned/
+models/wesad/finetuned/*
+!models/wesad/finetuned/*.json
+!models/wesad/modality/
+models/wesad/modality/*
+!models/wesad/modality/bvp_probabilities/
+!models/wesad/modality/bvp_probabilities/*.npy
+
 checkpoints/
 *.pt
 *.pth
@@ -83,11 +106,4 @@ pyrefly.toml
 pyrightconfig.json
 
 # ---------- Exception rules for required ML model artifacts and results ----------
-!models/*.pkl
-!models/wesad/*.json
-!models/wesad/finetuned/*.json
-!models/wesad/modality/bvp_probabilities/*.npy
-!data/processed/stress/splits/
-!data/processed/spo2/splits/
-!data/processed/moment_embeddings/
 !results/results.csv
